@@ -21,9 +21,9 @@ module Arel
   end
 
   class SelectManager < Arel::TreeManager
-    
+
     AR_CA_SQLSA_NAME = 'ActiveRecord::ConnectionAdapters::SQLServerAdapter'.freeze
-    
+
     # Getting real Ordering objects is very important for us. We need to be able to call #uniq on
     # a colleciton of them reliably as well as using their true object attributes to mutate them
     # to grouping objects for the inner sql during a select statment with an offset/rownumber. So this
@@ -37,17 +37,8 @@ module Arel
           table = Arel::Table.new(x.relation.table_alias || x.relation.name)
           e = table[x.name]
           Arel::Nodes::Ascending.new e
-        when Arel::Nodes::Ordering
+        when Arel::Nodes::Ordering, String
           x
-        when String
-          x.split(',').map do |s|
-            s = x if x.strip =~ /\A\b\w+\b\(.*,.*\)(\s+(ASC|DESC))?\Z/i # Allow functions with comma(s) to pass thru.
-            s.strip!
-            d = s =~ /(ASC|DESC)\Z/i ? $1.upcase : nil
-            e = d.nil? ? s : s.mb_chars[0...-d.length].strip
-            e = Arel.sql(e)
-            d && d == "DESC" ? Arel::Nodes::Descending.new(e) : Arel::Nodes::Ascending.new(e)
-          end
         else
           e = Arel.sql(x.to_s)
           Arel::Nodes::Ascending.new e
@@ -74,13 +65,13 @@ module Arel
         lock_without_sqlserver(locking)
       end
     end
-    
+
     private
-    
+
     def engine_activerecord_sqlserver_adapter?
       @engine.connection && @engine.connection.class.name == AR_CA_SQLSA_NAME
     end
-    
+
   end
 
   module Visitors
@@ -99,7 +90,7 @@ module Arel
           visit_Arel_Nodes_SelectStatementWithOutOffset(o)
         end
       end
-      
+
       def visit_Arel_Nodes_UpdateStatement(o)
         if o.orders.any? && o.limit.nil?
           o.limit = Nodes::Limit.new(9223372036854775807)
@@ -118,7 +109,7 @@ module Arel
       def visit_Arel_Nodes_Lock(o)
         visit o.expr
       end
-      
+
       def visit_Arel_Nodes_Ordering(o)
         if o.respond_to?(:direction)
           "#{visit o.expr} #{o.ascending? ? 'ASC' : 'DESC'}"
@@ -126,7 +117,7 @@ module Arel
           visit o.expr
         end
       end
-      
+
       def visit_Arel_Nodes_Bin(o)
         "#{visit o.expr} #{@connection.cs_equality_operator}"
       end
@@ -246,18 +237,18 @@ module Arel
           ((p1.respond_to?(:distinct) && p1.distinct) ||
             p1.respond_to?(:include?) && p1.include?('DISTINCT'))
       end
-      
+
       def windowed_single_distinct_select_statement?(o)
         o.limit && o.offset && single_distinct_select_statement?(o)
       end
-      
+
       def single_distinct_select_everything_statement?(o)
         single_distinct_select_statement?(o) && visit(o.cores.first.projections.first).ends_with?(".*")
       end
-      
+
       def top_one_everything_for_through_join?(o)
-        single_distinct_select_everything_statement?(o) && 
-          (o.limit && !o.offset) && 
+        single_distinct_select_everything_statement?(o) &&
+          (o.limit && !o.offset) &&
           join_in_select_statement?(o)
       end
 
@@ -275,9 +266,9 @@ module Arel
 
       def eager_limiting_select_statement?(o)
         core = o.cores.first
-        single_distinct_select_statement?(o) && 
-          (o.limit && !o.offset) && 
-          core.groups.empty? && 
+        single_distinct_select_statement?(o) &&
+          (o.limit && !o.offset) &&
+          core.groups.empty? &&
           !single_distinct_select_everything_statement?(o)
       end
 
@@ -293,7 +284,7 @@ module Arel
           o.limit &&
           !join_in_select_statement?(o)
       end
-      
+
       def select_primary_key_sql?(o)
         core = o.cores.first
         return false if core.projections.size != 1
